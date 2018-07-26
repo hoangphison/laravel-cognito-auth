@@ -147,13 +147,11 @@ class CognitoClient
      *
      * @param  string $username
      * @param  string $password
-     * @param  array  $attributes
-     * @return bool
+     * @param  array $attributes
+     * @return \Aws\Result
      */
     public function register($username, $password, array $attributes = [])
     {
-        $attributes['email'] = $username;
-
         try {
             $response = $this->client->signUp([
                 'ClientId' => $this->clientId,
@@ -163,16 +161,10 @@ class CognitoClient
                 'Username' => $username,
             ]);
         } catch (CognitoIdentityProviderException $e) {
-            if ($e->getAwsErrorCode() === self::USERNAME_EXISTS) {
-                return false;
-            }
-
             throw $e;
         }
 
-        $this->setUserAttributes($username, ['email_verified' => 'true']);
-
-        return (bool) $response['UserConfirmed'];
+        return $response;
     }
 
     /**
@@ -345,6 +337,102 @@ class CognitoClient
         }
 
         return $user;
+    }
+
+    /**
+     * Confirms registration of a user
+     * https://docs.aws.amazon.com/aws-sdk-php/v3/api/api-cognito-idp-2016-04-18.html#confirmsignup
+     *
+     * @param $username
+     * @param $confirmationCode
+     * @return bool
+     * @throws CognitoIdentityProviderException
+     */
+    public function confirmSignUp($code, $username)
+    {
+        try {
+            $this->client->confirmSignUp([
+                'ClientId' => $this->clientId,
+                'ConfirmationCode' => $code,
+                'Username' => $username,
+                'SecretHash' => $this->cognitoSecretHash($username),
+            ]);
+        } catch (CognitoIdentityProviderException $e) {
+            if ($e->getAwsErrorCode() === self::USER_NOT_FOUND || $e->getAwsErrorCode() === self::CODE_MISMATCH || $e->getAwsErrorCode() === self::EXPIRED_CODE) {
+                return false;
+            }
+
+            throw $e;
+        }
+
+        return true;
+    }
+
+    /**
+     * Gets the user attributes and metadata for a user.
+     * https://docs.aws.amazon.com/aws-sdk-php/v3/api/api-cognito-idp-2016-04-18.html#getuser
+     *
+     * @param $accessToken
+     * @return \Aws\Result
+     * @throws CognitoIdentityProviderException
+     */
+    public function getUserByAccessToken($accessToken)
+    {
+        try {
+            $user = $this->client->getUser([
+                'AccessToken' => $accessToken,
+            ]);
+        } catch (CognitoIdentityProviderException $e) {
+            throw $e;
+        }
+
+        return $user;
+    }
+
+    /**
+     * Get AWS Cognito Client
+     *
+     * @return AWSCognitoClient
+     */
+    public function getClient()
+    {
+        return $this->client;
+    }
+
+    /**
+     * Registers a new user with phone number as a username
+     *
+     * @param $phoneNumber
+     * @param $password
+     * @param array $attributes
+     * @return \Aws\Result|bool
+     */
+    public function signUpWithPhoneNumber($phoneNumber, $password, array $attributes = [])
+    {
+        $attributes['phone_number'] = $phoneNumber;
+
+        return $this->register($phoneNumber, $password, $attributes);
+    }
+
+    /**
+     * Resends the confirmation (for confirmation of registration) to a specific user in the user pool.
+     * https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ResendConfirmationCode.html
+     *
+     * @param string $username
+     */
+    public function resendConfirmationCode($username)
+    {
+        try {
+            $response = $this->client->resendConfirmationCode([
+                'ClientId' => $this->clientId,
+                'SecretHash' => $this->cognitoSecretHash($username),
+                'Username' => $username,
+            ]);
+        } catch (CognitoIdentityProviderException $e) {
+            throw $e;
+        }
+
+        return $response;
     }
 
     /**

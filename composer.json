@@ -30,5 +30,12 @@
         "classmap": [
             "tests/TestCase.php"
         ]
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "PodPoint\\LaravelCognitoAuth\\Providers\\CognitoAuthServiceProvider"
+            ]
+        }
     }
 }
